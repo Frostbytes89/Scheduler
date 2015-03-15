@@ -7,10 +7,13 @@
 #include "Scheduler.h"
 #include <SFML/System/Clock.hpp>
 #include <iostream>
+#include <fstream>
+#include <chrono>
 
 TimedFunc::TimedFunc(WorkFunction func)
   : m_interval(0),
 	m_nextTimeToCall(0),
+	m_timeLastCall(0),
 	m_doWork(func)
 {
 }
@@ -31,43 +34,49 @@ Scheduler::~Scheduler()
 
 }
 
+// For removing from the priority queue
+// scheduler maintains a list of tasks queued for deletion
+// before each task is done, we just check that list and remove the task from
+// the queue if we're in that list.
+std::ofstream os ("log.txt", std::ios::out);
+
 void Scheduler::RunTasks()
 {
-	while (!m_funcQueue.empty())
+	if (!os.is_open())
 	{
-		TimedFunc currentFunction = m_funcQueue.top();
-		int64_t currentTime = m_clock->getElapsedTime().asMilliseconds();
-
-		// First call
-		if (currentFunction.m_nextTimeToCall == 0 )
-		{
-			currentFunction.m_timeLastCall = currentTime;
-			m_funcQueue.top().m_doWork();
-			currentFunction.m_nextTimeToCall = currentFunction.m_timeLastCall + currentFunction.m_interval;
-			m_funcQueue.pop();
-			m_funcQueue.push(currentFunction);
-			continue;
-		}
-		
-		else if (m_clock->getElapsedTime().asMilliseconds() >= currentFunction.m_nextTimeToCall)
-		{
-			// when were we supposed to be called
-			// what time is it now?
-			// store the time now as the time last called
-			// store the difference in an offset
-			// call the function
-			//set the next time to call to the time this was called, plus (the interval minus the offset)
-
-			int64_t supposedtoBeCalled = currentFunction.m_timeLastCall;		
-			int64_t offset = currentTime - supposedtoBeCalled;
-
-			currentFunction.m_timeLastCall = currentTime;
-			currentFunction.m_doWork();
-			currentFunction.m_nextTimeToCall = currentTime + (currentFunction.m_interval - offset);
-			m_funcQueue.pop();
-			m_funcQueue.push(currentFunction);
-		}
+		std::cout << "could not open";
 	}
+
+	TimedFunc currentFunction = m_funcQueue.top();
+	
+	// If I wanted to use std::chrono
+	//int32_t currentTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+	//	 std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+
+	int32_t currentTime = m_clock->getElapsedTime().asMilliseconds();
+
+	if (currentTime >= currentFunction.m_nextTimeToCall)
+	{
+		int64_t supposedtoBeCalled = currentFunction.m_nextTimeToCall;
+		os << "When we were supposed to be called " << supposedtoBeCalled << "\n";
+		os << "Time Calling: " << currentTime << "\n";
+		int64_t offset = 0;
+		// If this isn't the first time calling this function.
+		if (supposedtoBeCalled != 0)
+		{
+			int64_t offset = currentTime - supposedtoBeCalled;
+			os << "offset for next time " << offset << "\n";
+		}
+		currentFunction.m_timeLastCall = currentTime;
+		currentFunction.m_doWork();
+		currentFunction.m_nextTimeToCall = currentTime + (currentFunction.m_interval - offset);
+		os << "Next Time to call " << currentFunction.m_nextTimeToCall << "\n";
+		m_funcQueue.pop();
+		m_funcQueue.push(currentFunction);
+
+		os << "===============================================\n";
+	}
+	os.flush();
 }
 
 void Scheduler::InsertIntoQueue(TimedFunc func)

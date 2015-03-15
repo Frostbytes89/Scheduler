@@ -23,8 +23,11 @@ int main()
 	scheduler.InsertIntoQueue(a);
 	scheduler.InsertIntoQueue(b);
 	scheduler.InsertIntoQueue(c);
-
-	scheduler.RunTasks();
+	while (true)
+	{
+		scheduler.RunTasks();
+	}
+	
 
 	system("pause");
 	return 0;
