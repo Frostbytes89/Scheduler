@@ -14,9 +14,9 @@ namespace sf
 typedef std::function<void()> WorkFunction;
 struct TimedFunc
 {
-	TimedFunc(WorkFunction func);
+	TimedFunc(WorkFunction func, char identifier);
 	~TimedFunc();
-
+	char m_identifier;
 	int m_interval;
 	int32_t m_nextTimeToCall;
 	int32_t m_timeLastCall;
@@ -40,8 +40,14 @@ public:
 	~Scheduler();
 
 	sf::Clock* m_clock;
-
 	void RunTasks();
 	TimedFuncPriorityQueue m_funcQueue;
 	void InsertIntoQueue(TimedFunc func);
+
+	void operator()() {
+		while (true)
+		{
+			RunTasks();
+		}
+	}
 };
