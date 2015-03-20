@@ -1,6 +1,6 @@
 //------------------------------------------------------------------------------
 //
-// AnimatedSprite.cpp
+// Scheduler.cpp
 // Joshua Sanders
 //
 
@@ -8,91 +8,85 @@
 #include <SFML/System/Clock.hpp>
 #include <iostream>
 #include <fstream>
-#include <chrono>
-
-TimedFunc::TimedFunc(WorkFunction func, char identifier)
-  : m_identifier(identifier),
-	m_interval(0),
-	m_nextTimeToCall(0),
-	m_timeLastCall(0),
-	m_doWork(func)
-{
-}
-
-TimedFunc::~TimedFunc()
-{
-}
-
-//------------------------------------------------------------------------------------
+#include <memory>
 
 Scheduler::Scheduler()
-  : m_clock(new sf::Clock())
+: m_clock(new sf::Clock()),
+m_currentTime(m_clock->getElapsedTime().asMilliseconds())
 {
 }
 
 Scheduler::~Scheduler()
 {
-
 }
 
 // For removing from the priority queue
 // scheduler maintains a list of tasks queued for deletion
 // before each task is done, we just check that list and remove the task from
 // the queue if we're in that list.
-std::ofstream os ("log.txt", std::ios::out);
+std::ofstream os("log.txt", std::ios::out);
 
 void Scheduler::RunTasks()
 {
-	if (!os.is_open())
+	if (m_funcQueue.empty())
 	{
-		std::cout << "could not open";
+		return;
 	}
 
-	TimedFunc currentFunction = m_funcQueue.top();
+	TimedCallback currentFunction(std::move(m_funcQueue.top()));
 
-	// If I wanted to use std::chrono
-	//int32_t currentTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-	//	 std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+	m_currentTime = m_clock->getElapsedTime().asMilliseconds();
 
-	int32_t currentTime = m_clock->getElapsedTime().asMilliseconds();
-
-	if (currentTime >= currentFunction.m_nextTimeToCall)
+	// Maybe we want to call function at next interval instead of immediately.
+	if (HandleDelayedTick(currentFunction))
 	{
-		os << "From Function " << currentFunction.m_identifier << "\n";
-		int64_t supposedtoBeCalled = currentFunction.m_nextTimeToCall;
-		os << "When we were supposed to be called " << supposedtoBeCalled << "\n";
-		os << "Time Calling: " << currentTime << "\n";
+		return;
+	}
 
-		int64_t offset = 0;
+	if (m_currentTime >= currentFunction.GetNextTimeToCall())
+	{
+		int32_t supposedtoBeCalled = currentFunction.GetNextTimeToCall();
+		int32_t offset = 0;
+
 		if (supposedtoBeCalled != 0)
 		{
-			offset = currentTime - supposedtoBeCalled;
-			os << "offset for next time " << offset << "\n";
+			offset = m_currentTime - supposedtoBeCalled;
 		}
 
-		currentFunction.m_timeLastCall = currentTime;
-		
-		// call func
-		currentFunction.m_doWork();
+		currentFunction.SetLastTimeCalled(m_currentTime);
 
-		int interval = currentFunction.m_interval;
+		//bool success = currentFunction.ExecuteCallback(std::shared_ptr<Worker>(), currentFunction);
+
+		int interval = currentFunction.GetInterval();
 		int offsetInterval = interval - offset;
 
-		os <<"Interval: " << currentFunction.m_interval << "\n";
-		os << "Offset Interval: " << offsetInterval << "\n";
-		os << "Current Time: " << currentTime << "\n";
+		currentFunction.SetNextTimeToCall(m_currentTime + (currentFunction.GetInterval() - offset));
 
-		currentFunction.m_nextTimeToCall = currentTime + (currentFunction.m_interval - offset);
-		os << "Next Time to call " << currentFunction.m_nextTimeToCall << "\n";
+		// only do this if the object is still alive
+		m_funcQueue.push(std::move(currentFunction));
 		m_funcQueue.pop();
-		m_funcQueue.push(currentFunction);
-
-		os << "===============================================\n";
 	}
 	os.flush();
 }
 
-void Scheduler::InsertIntoQueue(TimedFunc func)
+void Scheduler::InsertIntoQueue(const TimedCallback& cb)
 {
-	m_funcQueue.push(func);
+	m_funcQueue.push(std::move(cb));
+}
+
+bool Scheduler::HandleDelayedTick(TimedCallback& cb)
+{
+	bool delay = false;
+
+	if (cb.GetHasDelayedTick())
+	{
+		cb.SetNextTimeToCall(m_currentTime + cb.GetInterval());
+		cb.SetHasDelayedTick(false);
+		m_funcQueue.pop();
+		m_funcQueue.push(cb);
+
+		delay = true;
+	}
+
+	return delay;
 }
