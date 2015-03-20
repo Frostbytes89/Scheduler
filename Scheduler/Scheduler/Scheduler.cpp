@@ -6,9 +6,8 @@
 
 #include "Scheduler.h"
 #include <SFML/System/Clock.hpp>
-#include <iostream>
 #include <fstream>
-#include <memory>
+
 
 Scheduler::Scheduler()
 : m_clock(new sf::Clock()),
