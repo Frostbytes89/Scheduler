@@ -2,12 +2,9 @@
 #include "Worker.h"
 #include <iostream>
 #include <thread>
-#include <boost/move/unique_ptr.hpp>
 #include <memory>
 int main()
 {
-	Scheduler scheduler;
-
 	//TimedFunc a([] {
 	//	std::cout << "From Function A ";
 	//	std::cout << "Thread ID " << __threadid() << "\n";
@@ -66,7 +63,29 @@ int main()
 	//Scheduler schedulerA;
 	//schedulerA.InsertIntoQueue(workerFunc);
 
-	std::thread t1(scheduler);
+	std::shared_ptr<Worker> workerPtr(new Worker{});
+
+	Scheduler scheduler;
+	TimedCallback tcb(workerPtr, [&workerPtr] ()
+	{
+		workerPtr->AdvanceCurrentData();
+		workerPtr->PrintData();
+	});
+	tcb.SetInterval(1000);
+	scheduler.InsertIntoQueue(tcb);
+
+
+	Scheduler schedulerA;
+	TimedCallback deleter(workerPtr, [&workerPtr] {
+		workerPtr.reset();
+		std::cout << "\ndeleting\n";
+	});
+	deleter.SetInterval(5000);
+	deleter.SetHasDelayedTick(true);
+	schedulerA.InsertIntoQueue(deleter);
+
+	std::thread t1(std::move(scheduler));
+
 	// Join causes main to wait on separate thread
 	// Detach will make the new thread free
 	//t1.join();
@@ -74,7 +93,7 @@ int main()
 
 	while (true)
 	{
-		//	schedulerA.RunTasks();
+		schedulerA.RunTasks();
 	}
 
 	system("pause");

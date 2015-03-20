@@ -25,7 +25,7 @@ Scheduler::~Scheduler()
 // before each task is done, we just check that list and remove the task from
 // the queue if we're in that list.
 std::ofstream os("log.txt", std::ios::out);
-
+int counter = 0;
 void Scheduler::RunTasks()
 {
 	if (m_funcQueue.empty())
@@ -34,6 +34,7 @@ void Scheduler::RunTasks()
 	}
 
 	TimedCallback currentFunction(std::move(m_funcQueue.top()));
+	m_funcQueue.pop();
 
 	m_currentTime = m_clock->getElapsedTime().asMilliseconds();
 
@@ -43,6 +44,7 @@ void Scheduler::RunTasks()
 		return;
 	}
 
+	bool success = true;
 	if (m_currentTime >= currentFunction.GetNextTimeToCall())
 	{
 		int32_t supposedtoBeCalled = currentFunction.GetNextTimeToCall();
@@ -55,21 +57,22 @@ void Scheduler::RunTasks()
 
 		currentFunction.SetLastTimeCalled(m_currentTime);
 
-		//bool success = currentFunction.ExecuteCallback(std::shared_ptr<Worker>(), currentFunction);
+		success = currentFunction.ExecuteCallback();
 
 		int interval = currentFunction.GetInterval();
 		int offsetInterval = interval - offset;
 
-		currentFunction.SetNextTimeToCall(m_currentTime + (currentFunction.GetInterval() - offset));
-
-		// only do this if the object is still alive
-		m_funcQueue.push(std::move(currentFunction));
-		m_funcQueue.pop();
+		currentFunction.SetNextTimeToCall(m_currentTime + (currentFunction.GetInterval() - offset));		
 	}
+	if (success)
+	{
+		m_funcQueue.push(std::move(currentFunction));
+	}
+
 	os.flush();
 }
 
-void Scheduler::InsertIntoQueue(const TimedCallback& cb)
+void Scheduler::InsertIntoQueue(TimedCallback& cb)
 {
 	m_funcQueue.push(std::move(cb));
 }
@@ -82,8 +85,7 @@ bool Scheduler::HandleDelayedTick(TimedCallback& cb)
 	{
 		cb.SetNextTimeToCall(m_currentTime + cb.GetInterval());
 		cb.SetHasDelayedTick(false);
-		m_funcQueue.pop();
-		m_funcQueue.push(cb);
+		m_funcQueue.push(std::move(cb));
 
 		delay = true;
 	}
